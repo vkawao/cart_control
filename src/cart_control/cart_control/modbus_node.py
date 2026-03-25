@@ -29,13 +29,11 @@ class ControllinoModbus(Node):
 
     def cmd_vel_callback(self, msg):
         linear_x = msg.linear.x
-        angular_z = msg.angular.z
 
         # Initialize safe default states (Brakes on, Neutral gear)
         gear = 1      # 1 = Neutral
         reverse = 0   # 0 = Off
         brake = 1     # 1 = Low Brake
-        steering = 1  # 1 = Center (Assuming 0=Left, 1=Center, 2=Right for %QW14)
         
         # --- DRIVE LOGIC EVALUATION ---
         if linear_x > 0.05:
@@ -58,22 +56,12 @@ class ControllinoModbus(Node):
             reverse = 0
             brake = 1
             self.get_logger().info("Cmd: STOP -> Gear: Neutral, Brakes: Engaged")
-
-        # --- STEERING LOGIC EVALUATION ---
-        if angular_z > 0.1:
-            steering = 2 # Turn Left
-        elif angular_z < -0.1:
-            steering = 0 # Turn Right
-        else:
-            steering = 1 # Center
         
         # --- SEND TO CONTROLLINO ---
         try:
             self.client.write_register(address=10, value=gear, slave=self.slave_id)
             self.client.write_register(address=11, value=reverse, slave=self.slave_id)
             self.client.write_register(address=12, value=brake, slave=self.slave_id)
-            # Make sure you map %QW14 in OpenPLC before uncommenting the line below!
-            # self.client.write_register(address=14, value=steering, slave=self.slave_id) 
             
         except Exception as e:
             self.get_logger().error(f"Modbus transmission error: {e}")

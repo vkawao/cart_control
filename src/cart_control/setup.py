@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'modbus_node = cart_control.modbus_node:main'
+            'modbus_node = cart_control.modbus_node:main',
+            'dummy_teleop = cart_control.dummy_teleop:main'
         ],
     },
 )

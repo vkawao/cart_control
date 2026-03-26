@@ -8,7 +8,7 @@ class ControllinoModbus(Node):
         super().__init__('controllino_modbus_node')
         
         # --- LINUX SERIAL CONFIGURATION ---
-        self.port = '/dev/ttyUSB0'  
+        self.port = '/dev/ttyACM0' 
         self.baudrate = 115200
         self.slave_id = 2
         
@@ -28,36 +28,31 @@ class ControllinoModbus(Node):
         )
 
     def cmd_vel_callback(self, msg):
-        # We only care about linear velocity (drive/brake) now. 
-        # Steering (angular.z) is completely ignored by this node.
         linear_x = msg.linear.x
 
-        # Initialize safe default states
-        gear = 1      # 1 = Neutral
+        # Default fallback states
+        gear = 0      # 0 = Low Gear, 1 = Medium, 2 = High
         reverse = 0   # 0 = Off
         brake = 1     # 1 = Brake ON
         
         # --- DRIVE LOGIC EVALUATION ---
         if linear_x > 0.05:
-            # Moving Forward
             gear = 2
             reverse = 0
             brake = 0
-            self.get_logger().info("Cmd: FORWARD -> Gear: High, Brakes: RELEASED")
+            self.get_logger().info("Cmd: FORWARD HIGH -> Gear: High (2), Brakes: OFF")
             
         elif linear_x < -0.05:
-            # Moving Backward
             gear = 0      
             reverse = 1
             brake = 0
-            self.get_logger().info("Cmd: REVERSE -> Gear: Low, Reverse: ON, Brakes: RELEASED")
+            self.get_logger().info("Cmd: REVERSE -> Gear: Low (0), Reverse: ON, Brakes: OFF")
             
         else:
-            # Stopped (Deadband between -0.05 and 0.05 filters sensor noise)
-            gear = 1
+            gear = 0 # Gear doesn't matter when braked, defaulting to Low
             reverse = 0
             brake = 1
-            self.get_logger().info("Cmd: STOP -> Gear: Neutral, Brakes: ENGAGED")
+            self.get_logger().info("Cmd: STOP -> Brakes: ENGAGED")
         
         # --- SEND TO CONTROLLINO ---
         try:

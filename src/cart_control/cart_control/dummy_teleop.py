@@ -1,51 +1,72 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+import sys
+import termios
+import tty
 
-class DummyTeleop(Node):
+class IncrementalTeleop(Node):
     def __init__(self):
-        super().__init__('dummy_teleop_node')
+        super().__init__('incremental_teleop_node')
         self.publisher_ = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.get_logger().info("Dummy Teleop Started. Ready to transmit drive commands.")
+        self.current_speed = 0.0
+        self.speed_step = 0.1
 
-    def send_command(self, linear):
+    def update_and_publish(self, speed_change):
+        if speed_change == 0:
+            self.current_speed = 0.0
+        else:
+            self.current_speed = round(self.current_speed + speed_change, 2)
+            
         msg = Twist()
-        msg.linear.x = float(linear)
-        msg.angular.z = 0.0  # Zeroed out since steering is handled elsewhere
+        msg.linear.x = self.current_speed
+        msg.angular.z = 0.0
+        
         self.publisher_.publish(msg)
-        self.get_logger().info(f"Published -> Linear: {linear}")
+        print(f"\rPublished Speed: {self.current_speed} m/s    ", end='')
+
+def get_key(settings):
+    tty.setraw(sys.stdin.fileno())
+    import select
+    rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+    if rlist:
+        key = sys.stdin.read(1)
+    else:
+        key = ''
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+    return key
 
 def main(args=None):
     rclpy.init(args=args)
-    teleop_node = DummyTeleop()
+    teleop_node = IncrementalTeleop()
+    settings = termios.tcgetattr(sys.stdin)
 
-    print("\n" + "="*30)
-    print("   AUTOBUS DUMMY TELEOP (DRIVE ONLY)")
-    print("="*30)
-    print("  [ w ] : Forward (+0.5 m/s)")
-    print("  [ s ] : Reverse (-0.5 m/s)")
-    print("  [ x ] : Stop    ( 0.0 m/s)")
+    print("\n" + "="*35)
+    print(" AUTOBUS INCREMENTAL TELEOP")
+    print("="*35)
+    print("  [ w ] : Increase speed (+0.1)")
+    print("  [ s ] : Decrease speed (-0.1)")
+    print("  [ x ] : Force Stop     (0.0)")
     print("  [ q ] : Quit")
-    print("="*30)
+    print("="*35)
 
     try:
         while rclpy.ok():
-            choice = input("\nEnter command: ").strip().lower()
+            key = get_key(settings)
             
-            if choice == 'w':
-                teleop_node.send_command(0.5)
-            elif choice == 's':
-                teleop_node.send_command(-0.5)
-            elif choice == 'x':
-                teleop_node.send_command(0.0)
-            elif choice == 'q':
-                print("Shutting down teleop...")
+            if key == 'w':
+                teleop_node.update_and_publish(teleop_node.speed_step)
+            elif key == 's':
+                teleop_node.update_and_publish(-teleop_node.speed_step)
+            elif key == 'x':
+                teleop_node.update_and_publish(0.0)
+            elif key == 'q' or key == '\x03': # \x03 is Ctrl+C
                 break
-            else:
-                print("Invalid command.")
-    except KeyboardInterrupt:
-        pass
+                
+    except Exception as e:
+        print(e)
     finally:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
         teleop_node.destroy_node()
         rclpy.shutdown()
 
